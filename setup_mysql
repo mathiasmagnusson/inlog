@@ -1,0 +1,10 @@
+CREATE USER IF NOT EXISTS 'inlog'@'localhost' IDENTIFIED BY '1_?65cn<T8I6gPku';
+CREATE DATABASE IF NOT EXISTS inlog;
+GRANT ALL ON inlog.* TO 'inlog'@'localhost';
+USE inlog;
+CREATE TABLE IF NOT EXISTS account (
+	id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+	username VARCHAR(20) NOT NULL,
+	email VARCHAR(40) NULL,
+	password VARCHAR(60) NOT NULL
+);
