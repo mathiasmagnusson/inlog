@@ -5,21 +5,48 @@ const inp_repeat_password = document.querySelector("#repeat-password");
 const sumbit = document.querySelector("#sumbit");
 const error_text_el = document.querySelector("#error-text");
 
-function error_text() {
+function reset_error() {
+	document.querySelectorAll("#error-text > li")
+		.forEach(li => li.remove());
+}
 
+function error_text(str) {
+	const li = document.createElement("li");
+	li.textContent = str;
+	error_text_el.appendChild(li);
 }
 
 submit.addEventListener("click", async () => {
-	let username = inp_username.value;
-	let email = inp_email.value;
+	reset_error();
+
+	let username = inp_username.value.trim();
+	let email = inp_email.value.trim();
 	let password = inp_password.value;
 	let repeat_password = inp_repeat_password.value;
 
-	if (repeat_password !== password) {
-		return error_text("Lösenorden matchar inte");
-	} else {
-		error_text.textContent = "";
+	let fail;
+
+	if (password !== repeat_password) {
+		error_text("Lösenorden matchar inte");
+		fail = true;
 	}
+
+	if (password === "") {
+		error_text("Lösenord saknas");
+		fail = true;
+	}
+
+	if (username === "") {
+		error_text("Användarnamn saknas");
+		fail = true;
+	}
+
+	if (email === "") {
+		error_text("E-postadress saknas");
+		fail = true;
+	}
+
+	if (fail) return;
 
 	const res = await fetch("/api/register", {
 		method: "post",
@@ -28,6 +55,7 @@ submit.addEventListener("click", async () => {
 		},
 		body: JSON.stringify({
 			username,
+			email,
 			password,
 		}),
 	});

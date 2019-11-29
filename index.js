@@ -1,6 +1,7 @@
 const express = require("express");
-const mysql = require("mysql");
 const bcrypt = require("bcrypt");
+
+const db = require("./db.js");
 
 const server = express();
 const api = express();
@@ -9,35 +10,33 @@ server.use(express.json());
 server.use("/", express.static("public"));
 server.use("/api/", api);
 
-let db;
-function connectDB() {
-	db = mysql.createConnection({
-		host: "localhost",
-		user: "inlog",
-		password: "1_?65cn<T8I6gPku",
-		database: "inlog",
-	});
-
-	db.connect(err => {
-		if (err)
-			setTimeout(connectDB, 2000);
-	});
-
-	db.on("error", err => {
-		setTimeout(connectDB, 2000);
-	});
-}
-connectDB();
 
 api.get("/hello-there", (req, res) => {
 	res.send("general kenobi");
 });
 
-api.post("/register", (req, res) => {
-	console.log(req.body);
-	res.send({
-		"ok": "great",
-	});
+api.post("/register", async (req, res) => {
+	const { username, email, password } = req.body;
+
+	try {
+		const result = await db.query(
+			"SELECT COUNT(*) as taken FROM account WHERE username = ?",
+			username,
+		);
+
+		if (result[0].count > 0) {
+			return res.status(402).send({ "msg": "username taken" });
+		}
+	}
+	catch(e) {
+		console.error(e);
+		res.status(500).send({ msg: "internal server error" });
+	}
 });
 
-server.listen(4433, "127.0.0.1", () => console.log("server started"));
+server.use("/", (err, req, res, next) => {
+	res.status(500).send({ msg: "internal server error" });
+	console.error(err);
+});
+
+server.listen(4433, () => console.log("server started at http://locahost:4433"));
