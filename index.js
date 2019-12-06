@@ -63,6 +63,7 @@ api.post("/login", async (req, res) => {
 			return res.status(402).send({ "msg": "Felaktiga inloggningsuppgifter" });
 
 		// log in
+		// https://github.com/expressjs/session
 	}
 	catch (e) {
 		console.error(e);
