@@ -66,8 +66,11 @@ submit.addEventListener("click", async () => {
 	}
 	catch(e) {
 		return error_text("Serverfel");
-		console.error(e);
 	}
 
-	console.log(json);
+	if (res.status !== 200)
+		return error_text(json.msg);
+
+	if (json.redirect)
+		window.location = json.redirect;
 });

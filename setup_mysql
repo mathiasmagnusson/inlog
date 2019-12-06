@@ -1,4 +1,4 @@
-CREATE USER IF NOT EXISTS 'inlog'@'localhost' IDENTIFIED BY '1_?65cn<T8I6gPku';
+CREATE USER IF NOT EXISTS 'inlog'@'localhost' IDENTIFIED WITH mysql_native_password BY '1_?65cn<T8I6gPku';
 CREATE DATABASE IF NOT EXISTS inlog;
 GRANT ALL ON inlog.* TO 'inlog'@'localhost';
 USE inlog;

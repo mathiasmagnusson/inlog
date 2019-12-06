@@ -10,11 +10,14 @@ function connectDB() {
 	});
 
 	db.connect(err => {
-		if (err)
+		if (err) {
+			console.error("db.connect err => " + err);
 			setTimeout(connectDB, 2000);
+		}
 	});
 
 	db.on("error", err => {
+		console.error("db.on(\"error\") => " + err);
 		setTimeout(connectDB, 2000);
 	});
 }
