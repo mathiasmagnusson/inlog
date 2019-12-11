@@ -1,18 +1,25 @@
-const express = require("express");
 const bcrypt = require("bcrypt");
+const cookie_parser = require("cookie-parser");
+const express = require("express");
+
 const db = require("./db.js");
+const session = require("./session.js");
 
 const server = express();
 const api = express();
 
+server.use(cookie_parser());
 server.use(express.json());
+
+server.get("/", (req, res) => {
+	if (req.cookies && req.cookies.sid && session.has(req.cookies.sid))
+		res.redirect("/home");
+	else
+		res.redirect("/login");
+});
+
 server.use("/", express.static("public"));
 server.use("/api/", api);
-
-
-api.get("/hello-there", (req, res) => {
-	res.send("general kenobi");
-});
 
 api.post("/register", async (req, res) => {
 	const { username, email, password } = req.body;
@@ -46,30 +53,41 @@ api.post("/login", async (req, res) => {
 
 	try {
 		const result = await db.query(
-			"SELECT password FROM account WHERE username = ?",
+			"SELECT id, password FROM account WHERE username = ?",
 			username,
 		);
 
-		let username_exists = result.length == 0;
+		let username_exists = result.length > 0;
 
 		// För att det inte ska gå att brute-forca vilka användarnamn som finns
 		// i databasen genom att mäta med tid om servern hashar ett lösenord så
 		// hashas och jämförs ändå det angivna lösenordet med en exempelhash.
+		// Därmed tar det lika lång tid för servern att svara oavsett vad som
+		// var fel; användarnamn eller lösenord.
 		const hash = username_exists ? result[0].password : "$2b$10$iegfsCC2ODTkuDemvEGIGeAf7/vEUjU2QUITW27cHtS08kGTRAO4e";
 
 		const password_correct = await bcrypt.compare(password, hash);
 
 		if (!(password_correct && username_exists))
-			return res.status(402).send({ "msg": "Felaktiga inloggningsuppgifter" });
+			return res.status(402).send({ msg: "Felaktiga inloggningsuppgifter" });
 
 		// log in
-		// https://github.com/expressjs/session
+		const cookie = await session.create({ id: result[0].id });
+		res.status(200).cookie("sid", cookie, { httpOnly: true }).send({ msg: "Inloggad", redirect: "/home/" });
 	}
 	catch (e) {
 		console.error(e);
 		res.status(500).send({ msg: "Internt serverfel" });
 	}
-})
+});
+
+api.post("/logout", async (req, res) => {
+	if (req.cookies && req.cookies.sid) {
+		session.remove(req.cookies.sid);
+		res.status(200).clearCookie("sid", { httpOnly: true }).send({ redirect: "/" });
+	}
+	res.status(200).send({ redirect: "/" });
+});
 
 server.use("/", (err, req, res, next) => {
 	res.status(500).send({ msg: "Internt serverfel" });

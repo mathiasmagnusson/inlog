@@ -12,7 +12,10 @@
   "license": "ISC",
   "dependencies": {
     "bcrypt": "^3.0.7",
+    "cookie-parser": "^1.4.4",
     "express": "^4.17.1",
-    "mysql": "^2.17.1"
+    "express-session": "^1.17.0",
+    "mysql": "^2.17.1",
+    "uid-safe": "^2.1.5"
   }
 }
