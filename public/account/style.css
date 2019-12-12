@@ -1,0 +1,18 @@
+body {
+	display: grid;
+	grid-template-columns: 200px 1fr;
+	grid-template-rows: 1fr;
+}
+
+nav {
+	background-color: #204060;
+}
+
+main {
+	background-color: white;
+}
+
+h1 {
+	text-align: center;
+	margin-bottom: 20px;
+}
