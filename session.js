@@ -12,10 +12,22 @@ module.exports = {
 		return id;
 	},
 	get: function(id) {
-		return store.get(id);
+		if (typeof id === "string")
+			return store.get(id);
+
+		if (!"cookies" in x || !"sid" in x.cookies)
+			return false;
+
+		return store.get(x.cookies.sid);
 	},
-	has: function(id) {
-		return store.has(id);
+	has: function(x) {
+		if (typeof x === "string")
+			return store.has(x);
+
+		if (!"cookies" in x || !"sid" in x.cookies)
+			return false;
+
+		return store.has(x.cookies.sid);
 	},
 	remove: function(id) {
 		return store.delete(id);

@@ -11,15 +11,54 @@ const api = express();
 server.use(cookie_parser());
 server.use(express.json());
 
-server.get("/", (req, res) => {
-	if (req.cookies && req.cookies.sid && session.has(req.cookies.sid))
-		res.redirect("/home");
-	else
-		res.redirect("/login");
-});
-
 server.use("/", express.static("public"));
 server.use("/api/", api);
+
+api.post("/num", async (req, res) => {
+	console.log(req.body);
+
+	if (!session.has(req))
+		return res.status(401).send({ msg: "Du måste logga för att göra detta", redirect: "/login/" });
+
+	let id = session.get(req.cookies.sid).id;
+
+	try {
+		const { num } = req.body;
+
+		const result = await db.query(
+			"UPDATE fav_nums WHERE account_id = ? SET fav_num = ?",
+			[ id, num ]
+		);
+
+		res.status(204).send();
+	}
+	catch (e) {
+		console.error(e);
+		res.status(500).send({ msg: "Internt serverfel" });
+	}
+});
+
+api.get("/num", async (req, res) => {
+	if (!session.has(req))
+		return res.status(401).send({ msg: "Du måste logga för att göra detta", redirect: "/login/" });
+
+	let id = session.get(req.cookies.sid).id;
+
+	try {
+		const result = await db.query(
+			"SELECT favnum FROM fav_nums WHERE account_id = ?",
+			id
+		);
+
+		let favnum = result[0] ? result[0].favnum : 0;
+
+		res.status(200).send({ favnum });
+	}
+	catch (e) {
+		console.error(e);
+		res.status(500).send({ msg: "Internt serverfel" });
+	}
+});
 
 api.post("/register", async (req, res) => {
 	const { username, email, password } = req.body;
@@ -82,11 +121,8 @@ api.post("/login", async (req, res) => {
 });
 
 api.post("/logout", async (req, res) => {
-	if (req.cookies && req.cookies.sid) {
-		session.remove(req.cookies.sid);
-		res.status(200).clearCookie("sid", { httpOnly: true }).send({ redirect: "/" });
-	}
-	res.status(200).send({ redirect: "/" });
+	session.remove(req.cookies.sid);
+	res.clearCookie("sid", { httpOnly: true }).status(200).send({ redirect: "/" });
 });
 
 server.use("/", (err, req, res, next) => {
