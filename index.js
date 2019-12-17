@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const cookie_parser = require("cookie-parser");
 const express = require("express");
+const path = require("path");
 
 const db = require("./db.js");
 const session = require("./session.js");
@@ -11,24 +12,44 @@ const api = express();
 server.use(cookie_parser());
 server.use(express.json());
 
-server.use("/", express.static("public"));
+server.use("/", express.static("client/public"));
+[
+	"/",
+	"/home",
+	"/login",
+	"/register",
+	"/account",
+].forEach(route => {
+	server.get(route, (req, res) => res.sendFile(path.resolve("client/public/index.html")));
+});
+
 server.use("/api/", api);
 
-api.post("/num", async (req, res) => {
-	console.log(req.body);
-
+api.post("/fav-num", async (req, res) => {
 	if (!session.has(req))
 		return res.status(401).send({ msg: "Du måste logga för att göra detta", redirect: "/login/" });
 
-	let id = session.get(req.cookies.sid).id;
+	let account_id = session.get(req.cookies.sid).id;
 
 	try {
-		const { num } = req.body;
+		const { "fav-num": fav_num } = req.body;
 
-		const result = await db.query(
-			"UPDATE fav_nums WHERE account_id = ? SET fav_num = ?",
-			[ id, num ]
+		const select_res = await db.query(
+			"SELECT id FROM fav_nums WHERE account_id = ?",
+			account_id
 		);
+
+		if (select_res.length == 0) {
+			const insert_res = await db.query(
+				"INSERT INTO fav_nums (account_id, fav_num) VALUES (?, ?)",
+				[account_id, fav_num]
+			);
+		} else {
+			const update_res = await db.query(
+				"UPDATE fav_nums SET fav_num = ? WHERE id = ?",
+				[fav_num, select_res[0].id]
+			);
+		}
 
 		res.status(204).send();
 	}
@@ -38,7 +59,7 @@ api.post("/num", async (req, res) => {
 	}
 });
 
-api.get("/num", async (req, res) => {
+api.get("/fav-num", async (req, res) => {
 	if (!session.has(req))
 		return res.status(401).send({ msg: "Du måste logga för att göra detta", redirect: "/login/" });
 
@@ -46,13 +67,13 @@ api.get("/num", async (req, res) => {
 
 	try {
 		const result = await db.query(
-			"SELECT favnum FROM fav_nums WHERE account_id = ?",
+			"SELECT fav_num FROM fav_nums WHERE account_id = ?",
 			id
 		);
 
-		let favnum = result[0] ? result[0].favnum : 0;
+		let fav_num = result[0] ? result[0].fav_num : undefined;
 
-		res.status(200).send({ favnum });
+		res.status(200).send({ "fav-num": fav_num });
 	}
 	catch (e) {
 		console.error(e);
@@ -90,6 +111,9 @@ api.post("/register", async (req, res) => {
 api.post("/login", async (req, res) => {
 	const { username, password } = req.body;
 
+	if (!username || !password)
+		return res.status(400).send({ msg: "Användanamn / Lösenord saknas" });
+
 	try {
 		const result = await db.query(
 			"SELECT id, password FROM account WHERE username = ?",
@@ -98,11 +122,6 @@ api.post("/login", async (req, res) => {
 
 		let username_exists = result.length > 0;
 
-		// För att det inte ska gå att brute-forca vilka användarnamn som finns
-		// i databasen genom att mäta med tid om servern hashar ett lösenord så
-		// hashas och jämförs ändå det angivna lösenordet med en exempelhash.
-		// Därmed tar det lika lång tid för servern att svara oavsett vad som
-		// var fel; användarnamn eller lösenord.
 		const hash = username_exists ? result[0].password : "$2b$10$iegfsCC2ODTkuDemvEGIGeAf7/vEUjU2QUITW27cHtS08kGTRAO4e";
 
 		const password_correct = await bcrypt.compare(password, hash);
@@ -112,7 +131,7 @@ api.post("/login", async (req, res) => {
 
 		// log in
 		const cookie = await session.create({ id: result[0].id });
-		res.status(200).cookie("sid", cookie, { httpOnly: true }).send({ msg: "Inloggad", redirect: "/home/" });
+		res.status(200).cookie("sid", cookie).send({ msg: "Inloggad", redirect: "/home" });
 	}
 	catch (e) {
 		console.error(e);
@@ -122,7 +141,7 @@ api.post("/login", async (req, res) => {
 
 api.post("/logout", async (req, res) => {
 	session.remove(req.cookies.sid);
-	res.clearCookie("sid", { httpOnly: true }).status(200).send({ redirect: "/" });
+	res.clearCookie("sid").status(200).send({ redirect: "/" });
 });
 
 server.use("/", (err, req, res, next) => {

@@ -1,5 +1,5 @@
 <script>
-	import { Navigate } from "svelte-router-spa";
+	import { navigateTo } from "svelte-router-spa";
 
 	let errors = [];
 	let username = "";
@@ -14,7 +14,7 @@
 		if (username === "")
 			errors = [...errors, "Användarnamn saknas"];
 
-		if (errors) return;
+		if (errors.length > 0) return;
 
 		const res = await fetch("/api/login", {
 			method: "post",
@@ -27,11 +27,9 @@
 			}),
 		});
 
-		console.log("hej");
-
 		let json;
 		try {
-			json = await json();
+			json = await res.json();
 		}
 		catch (e) {
 			return errors = [...errors, "Serverfel"];
@@ -41,16 +39,18 @@
 			return errors = [...errors, json.msg];
 
 		if (json.redirect)
-			window.location = json.redirect;
+			navigateTo(json.redirect);
 	}
 </script>
 
 <style>
-	:global(body) {
+	.bg {
 		background-color: #4080ff;
 		display: flex;
 		justify-content: center;
 		align-items: center;
+		width: 100vw;
+		height: 100vh;
 	}
 
 	main {
@@ -71,18 +71,20 @@
 	}
 </style>
 
+<div class="bg">
 <main>
 	<h1>Logga in</h1>
 	<div class="grid-form">
-			<label for="username">Användarnamn</label>
-			<input type="text" bind:value={username} placeholder="johnsmith" />
-			<label for="password">Lösenord</label>
-			<input type="password" bind:value={password} placeholder="************" />
-			<button on:click={submit}>Logga in</button>
-			<ul class="error-text">
-				{#each errors as error}
-					<li>{error}</li>
-				{/each}
-			</ul>
+		<label for="username">Användarnamn</label>
+		<input type="text" bind:value={username} placeholder="johnsmith" />
+		<label for="password">Lösenord</label>
+		<input type="password" bind:value={password} placeholder="************" />
+		<button on:click={submit}>Logga in</button>
+		<ul class="error-text">
+			{#each errors as error}
+				<li>{error}</li>
+			{/each}
+		</ul>
 	</div>
 </main>
+</div>

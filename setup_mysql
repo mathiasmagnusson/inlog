@@ -11,6 +11,6 @@ CREATE TABLE IF NOT EXISTS account (
 CREATE TABLE IF NOT EXISTS fav_nums (
 	id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
 	account_id INT NOT NULL,
-	favnum INT NOT NULL,
+	fav_num INT NOT NULL,
 	FOREIGN KEY (account_id) REFERENCES account(id)
 );
