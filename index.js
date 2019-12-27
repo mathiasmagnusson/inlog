@@ -1,6 +1,8 @@
 const bcrypt = require("bcrypt");
 const cookie_parser = require("cookie-parser");
 const express = require("express");
+const fs = require("fs").promises;
+const nodemailer = require("nodemailer");
 const path = require("path");
 
 const db = require("./db.js");
@@ -139,6 +141,37 @@ api.post("/login", async (req, res) => {
 	}
 });
 
+api.post("/reset-password", async (req, res) => {
+	try {
+		const creds = JSON.parse(await fs.readFile("creds.json")).smtp;
+
+		const transporter = nodemailer.createTransport({
+			host: "mail.magnusson.space",
+			port: 587,
+			secure: false,
+			auth: {
+				user: creds.user,
+				pass: creds.pass,
+			},
+		});
+
+		await transporter.sendMail({
+			from: "no-reply <noreply@magnusson.space>",
+			to: "mathiasmagnussons@gmail.com",
+			subject: "Password reset link",
+			text: "Yepp, go to https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			html: "<p>Yepp <a href=\"https://www.youtube.com/watch?v=dQw4w9WgXcQ\">click me</a></p>",
+		});
+
+		res.status(500).send({ msg: "Lösenordsåterställningsmail skickat (kolla skräppost!)" });
+	}
+	catch (err) {
+		console.error(err);
+		res.status(500).send({ msg: "Internt serverfel: " + err });
+		console.log(nodemailer);
+	}
+});
+
 api.post("/logout", async (req, res) => {
 	session.remove(req.cookies.sid);
 	res.clearCookie("sid").status(200).send({ redirect: "/" });
@@ -149,4 +182,4 @@ server.use("/", (err, req, res, next) => {
 	console.error(err);
 });
 
-server.listen(4433, () => console.log("server started at http://locahost:4433"));
+server.listen(4433, () => console.log("server started at http://localhost:4433"));
