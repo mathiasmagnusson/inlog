@@ -1,14 +1,16 @@
-const fs = require("fs");
 const mysql = require("mysql");
+
+const creds = require("./creds.js");
 
 let db;
 function connectDB() {
-	const creds = JSON.parse(fs.readFileSync("creds.json")).mysql;
+	const { host, user, pass, database } = creds.mysql;
+
 	db = mysql.createConnection({
-		host: "localhost",
-		user: creds.user,
-		password: creds.pass,
-		database: "inlog",
+		host,
+		user,
+		password: pass,
+		database,
 	});
 
 	db.connect(err => {

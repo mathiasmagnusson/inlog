@@ -1,10 +1,12 @@
 const bcrypt = require("bcrypt");
 const cookie_parser = require("cookie-parser");
+const escape_html = require("escape-html");
 const express = require("express");
-const fs = require("fs").promises;
 const nodemailer = require("nodemailer");
 const path = require("path");
+const uid = require("uid-safe");
 
+const creds = require("./creds.js");
 const db = require("./db.js");
 const session = require("./session.js");
 
@@ -21,9 +23,10 @@ server.use("/", express.static("client/public"));
 	"/login",
 	"/register",
 	"/account",
-].forEach(route => {
-	server.get(route, (req, res) => res.sendFile(path.resolve("client/public/index.html")));
-});
+]
+	.forEach(route => {
+		server.get(route, (req, res) => res.sendFile(path.resolve("client/public/index.html")));
+	});
 
 server.use("/api/", api);
 
@@ -131,7 +134,6 @@ api.post("/login", async (req, res) => {
 		if (!(password_correct && username_exists))
 			return res.status(402).send({ msg: "Felaktiga inloggningsuppgifter" });
 
-		// log in
 		const cookie = await session.create({ id: result[0].id });
 		res.status(200).cookie("sid", cookie).send({ msg: "Inloggad", redirect: "/home" });
 	}
@@ -141,29 +143,57 @@ api.post("/login", async (req, res) => {
 	}
 });
 
+let reset_password_codes = new Map();
 api.post("/reset-password", async (req, res) => {
+	const { email, code } = req.body;
+
 	try {
-		const creds = JSON.parse(await fs.readFile("creds.json")).smtp;
+		const result = await db.query(
+			"SELECT id, username FROM account WHERE email = ?",
+			email,
+		);
+
+		// För att det inte ska gå att se vilka adresser som finns är registrerade så ljuger vi ihop
+		// något här. Det kanske ändå går att upptäcka detta m.h.a. tiden det tar för servern att svara
+		// men jag känner att det här får duga.
+		if (result.length == 0)
+			return res.status(500).send({ msg: "Lösenordsåterställningsmail skickat (kolla skräppost!)" });
 
 		const transporter = nodemailer.createTransport({
 			host: "mail.magnusson.space",
 			port: 587,
 			secure: false,
 			auth: {
-				user: creds.user,
-				pass: creds.pass,
+				user: creds.smtp.user,
+				pass: creds.smtp.pass,
 			},
 		});
 
-		await transporter.sendMail({
+		const codes_names = await Promise.all(result.map(async ({ id, username }) => {
+			let reset_code;
+			do {
+				reset_code = await uid(18);
+			} while (reset_password_codes.has(reset_code));
+
+			reset_password_codes.set(reset_code, {
+				account_id: id,
+				expiration: Date.now() + 1000 * 60 * 10,
+			});
+
+			return { reset_code, username };
+		}));
+
+		const mail_res = await transporter.sendMail({
 			from: "no-reply <noreply@magnusson.space>",
-			to: "mathiasmagnussons@gmail.com",
-			subject: "Password reset link",
-			text: "Yepp, go to https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-			html: "<p>Yepp <a href=\"https://www.youtube.com/watch?v=dQw4w9WgXcQ\">click me</a></p>",
+			to: email,
+			subject: "Lösenordsåterställning",
+			text: codes_names.map(({ reset_code, username }) =>
+				`Använd koden "${reset_code}" för att återställa lösenordet till kontot "${escape_html(username)}".\n\n`),
+			html: codes_names.map(({ reset_code, username }) =>
+				`<p>Använd koden <pre>${reset_code}</pre> för att återställa lösenordet till kontot <i>${escape_html(username)}</i>.</p>`),
 		});
 
-		res.status(500).send({ msg: "Lösenordsåterställningsmail skickat (kolla skräppost!)" });
+		res.status(500).send({ msg: "Lösenordsåterställningsmail skickat (kolla skräpposten!)" });
 	}
 	catch (err) {
 		console.error(err);

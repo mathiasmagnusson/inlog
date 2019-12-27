@@ -1,4 +1,6 @@
 <script>
+	import { navigateTo } from "svelte-router-spa";
+
 	let state = "loading";
 	let fav_num;
 	let new_num;
@@ -8,6 +10,9 @@
 		try {
 			const res = await fetch("/api/fav-num");
 			const json = await res.json();
+
+			if (json.redirect)
+				navigateTo(json.redirect);
 
 			fav_num = json["fav-num"];
 			state = "success";
