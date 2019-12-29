@@ -1,5 +1,6 @@
 <script>
 	import { navigateTo } from "svelte-router-spa";
+	import { slide } from "svelte/transition";
 
 	let errors = [];
 	let successes = [];
@@ -81,27 +82,23 @@
 	<h1>Registrera</h1>
 	<div class="grid-form">
 		<label for="username">Användarnamn</label>
-		<input type="text" bind:value={username} placeholder="johnsmith" />
+		<input type="text" id="username" bind:value={username} placeholder="johnsmith" autofocus />
 		<label for="email">E-postadress</label>
-		<input type="email" bind:value={email} placeholder="johnsmith@domain.com" />
+		<input type="email" id="email" bind:value={email} placeholder="john.smith@domain.com" />
 		<label for="password">Lösenord</label>
-		<input type="password" bind:value={password} placeholder="************" />
+		<input type="password" id="password" bind:value={password} placeholder="************" />
 		<label for="repeat-password">Repetera Lösenord</label>
-		<input type="password" bind:value={repeat_password} placeholder="************" />
+		<input type="password" id="repeat-password" bind:value={repeat_password} placeholder="************" />
 		<button class="wide" on:click={submit}>Registrera</button>
-		{#if errors.length}
-			<ul class="error-text">
-				{#each errors as error}
-					<li>{error}</li>
-				{/each}
-			</ul>
-		{/if}
-		{#if successes.length}
-			<ul class="success-text">
-				{#each successes as success}
-					<li>{success}</li>
-				{/each}
-			</ul>
-		{/if}
+		<ul class="error-text">
+			{#each errors as error}
+				<li in:slide>{error}</li>
+			{/each}
+		</ul>
+		<ul class="success-text">
+			{#each successes as success}
+				<li in:slide>{success}</li>
+			{/each}
+		</ul>
 	</div>
 </main>

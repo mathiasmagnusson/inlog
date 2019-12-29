@@ -61,19 +61,157 @@ function error_wrapper(handler) {
 	};
 }
 
+api.get("/logged-in", error_wrapper(async (req, res) => {
+	res.status(200).send({ "logged-in": sessions.has(req) });
+}));
+
 api.get("/username", withAuth(async (session, req, res) => {
 	const result = await db.query(
 		"SELECT username FROM account WHERE id = ?",
-		session.id,
+		session.aid,
 	);
 
 	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("username", ...)`;
 
 	const { username } = result[0];
 
-	await delay(500);
-
 	res.status(200).send({ username });
+}));
+
+api.post("/username", withAuth(async (session, req, res) => {
+	const { username, password } = req.body;
+
+	if (!username)
+		return res.status(400).send({ msg: "E-postadress saknas" });
+
+	if (!password)
+		return res.status(400).send({ msg: "Lösenord saknas" });
+
+	const result = await db.query(
+		"SELECT password AS hash FROM account WHERE id = ?",
+		session.aid,
+	);
+
+	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("change-email", ...)`;
+
+	const { hash } = result[0];
+
+	const password_correct = await bcrypt.compare(password, hash);
+
+	if (!password_correct)
+		return res.status(406).send({ msg: "Inkorrekt lösenord" });
+
+	const taken_result = await db.query(
+		"SELECT COUNT(*) AS taken FROM account WHERE username = ?",
+		username,
+	);
+
+	if (taken_result[0].taken > 0)
+		return res.status(406).send({ "msg": "Användarnamn upptaget" });
+
+	const update_result = await db.query(
+		"UPDATE account SET username = ? WHERE id = ?",
+		[username, session.aid],
+	);
+
+	if (update_result.affectedRows !== 1)
+		throw `Error: Username change affected ${update_result.affectedRows} rows. Should be 1`;
+
+	res.status(200).send({ msg: "Användarnamn ändrat" });
+}));
+
+api.get("/email", withAuth(async (session, req, res) => {
+	const result = await db.query(
+		"SELECT email FROM account WHERE id = ?",
+		session.aid,
+	);
+
+	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("email", ...)`;
+
+	const { email } = result[0];
+
+	res.status(200).send({ email });
+}));
+
+api.post("/email", withAuth(async (session, req, res) => {
+	const { email, password } = req.body;
+
+	if (!email)
+		return res.status(400).send({ msg: "E-postadress saknas" });
+
+	if (!password)
+		return res.status(400).send({ msg: "Lösenord saknas" });
+
+	if (!validate_email(email))
+		return res.status(400).send({ msg: "Felformaterad e-postadress" });
+
+	const result = await db.query(
+		"SELECT password AS hash FROM account WHERE id = ?",
+		session.aid,
+	);
+
+	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("change-email", ...)`;
+
+	const { hash } = result[0];
+
+	const password_correct = await bcrypt.compare(password, hash);
+
+	if (!password_correct)
+		return res.status(406).send({ msg: "Inkorrekt lösenord" });
+
+	const update_result = await db.query(
+		"UPDATE account SET email = ? WHERE id = ?",
+		[email, session.aid]
+	);
+
+	if (update_result.affectedRows !== 1)
+		throw `Error: Email change affected ${result.affectedRows} rows. Should be 1`;
+
+	res.status(200).send({ msg: "E-postadress ändrad" });
+}));
+
+api.post("/change-password", withAuth(async (session, req, res) => {
+	const {
+		"old-password": old_password,
+		"new-password": new_password,
+	} = req.body;
+
+	if (!old_password)
+		return res.status(400).send({ msg: "Gammalt lösenord saknas" });
+
+	if (!new_password)
+		return res.status(400).send({ msg: "Nytt lösenord saknas" });
+
+	const result = await db.query(
+		"SELECT password AS hash FROM account WHERE id = ?",
+		session.aid,
+	);
+
+	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("change-email", ...)`;
+
+	const { hash } = result[0];
+
+	const password_correct = await bcrypt.compare(old_password, hash);
+
+	if (!password_correct)
+		return res.status(406).send({ msg: "Inkorrekt lösenord" });
+
+
+	// Alla sessioner som är inloggade på det här kontot, men som inte är just
+	// den här sessionen, loggas ut.
+	sessions.remove_if((sid, other) => other.aid === session.aid && sid !== session.sid);
+
+	const new_hash = await bcrypt.hash(new_password, SALT_ROUNDS);
+
+	const update_result = await db.query(
+		"UPDATE account SET password = ? WHERE id = ?",
+		[new_hash, session.aid],
+	);
+
+	if (update_result.affectedRows !== 1)
+		throw `Error: Password change affected ${update_result.affectedRows} rows. Should be 1`;
+
+	res.status(200).send({ msg: "Lösenord ändrat" });
 }));
 
 api.post("/fav-num", withAuth(async (session, req, res) => {
@@ -83,34 +221,34 @@ api.post("/fav-num", withAuth(async (session, req, res) => {
 		return res.status(400).send({ msg: "Inte ett nummer" });
 
 	const select_res = await db.query(
-		"SELECT id FROM fav_nums WHERE account_id = ?",
-		session.id,
+		"SELECT id FROM fav_num WHERE account_id = ?",
+		session.aid,
 	);
 
 	if (select_res.length == 0) {
 		const insert_res = await db.query(
-			"INSERT INTO fav_nums (account_id, fav_num) VALUES (?, ?)",
-			[session.id, fav_num],
+			"INSERT INTO fav_num (account_id, num) VALUES (?, ?)",
+			[session.aid, fav_num],
 		);
 	} else {
 		const update_res = await db.query(
-			"UPDATE fav_nums SET fav_num = ? WHERE id = ?",
+			"UPDATE fav_num SET num = ? WHERE id = ?",
 			[fav_num, select_res[0].id],
 		);
 	}
 
-	res.status(200).send({});
+	res.status(200).send({ msg: "Favoritnummer updaterat" });
 }));
 
 api.get("/fav-num", withAuth(async (session, req, res) => {
 	const result = await db.query(
-		"SELECT fav_num FROM fav_nums WHERE account_id = ?",
-		session.id,
+		"SELECT num FROM fav_num WHERE account_id = ?",
+		session.aid,
 	);
 
-	let fav_num = result[0] ? result[0].fav_num : undefined;
+	let num = result[0] ? result[0].num : undefined;
 
-	res.status(200).send({ "fav-num": fav_num });
+	res.status(200).send({ "fav-num": num });
 }));
 
 api.post("/register", error_wrapper(async (req, res) => {
@@ -160,7 +298,7 @@ api.post("/login", error_wrapper(async (req, res) => {
 	if (!(password_correct && username_exists))
 		return res.status(406).send({ msg: "Felaktiga inloggningsuppgifter" });
 
-	const cookie = await sessions.create({ id: result[0].id });
+	const cookie = await sessions.create({ aid: result[0].id });
 	res.status(200).cookie("sid", cookie).send({ msg: "Inloggad", redirect: "/" });
 }));
 
@@ -187,7 +325,7 @@ async function submit_reset_code(code, password, res) {
 	if (!password_reset_codes.has(code))
 		return res.status(406).send({ msg: "Ogiltig kod" });
 
-	const { account_id, expiration } = password_reset_codes.get(code);
+	const { aid, expiration } = password_reset_codes.get(code);
 
 	password_reset_codes.delete(code);
 
@@ -196,13 +334,13 @@ async function submit_reset_code(code, password, res) {
 
 	// I fall att någon är inloggad på kontot när lösenordet ändras
 	// så loggas denna ut.
-	sessions.remove_if((key, val) => val.id === account_id);
+	sessions.remove_if((key, val) => val.aid === aid);
 
 	const hash = await bcrypt.hash(password, SALT_ROUNDS);
 
 	const result = await db.query(
 		"UPDATE account SET password = ? WHERE id = ?",
-		[hash, account_id],
+		[hash, aid],
 	);
 
 	if (result.affectedRows !== 1)
@@ -216,7 +354,7 @@ async function request_reset_code(email, res) {
 		return res.status(400).send({ msg: "Felformaterad e-postadress" });
 
 	const result = await db.query(
-		"SELECT id AS account_id, username FROM account WHERE email = ?",
+		"SELECT id AS aid, username FROM account WHERE email = ?",
 		email,
 	);
 
@@ -244,14 +382,14 @@ async function request_reset_code(email, res) {
 		},
 	});
 
-	const codes_names = await Promise.all(result.map(async ({ account_id, username }) => {
+	const codes_names = await Promise.all(result.map(async ({ aid, username }) => {
 		let reset_code;
 		do {
 			reset_code = await uid(18);
 		} while (password_reset_codes.has(reset_code));
 
 		password_reset_codes.set(reset_code, {
-			account_id,
+			aid,
 			expiration: Date.now() + 1000 * 60 * 10,
 		});
 

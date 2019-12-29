@@ -1,6 +1,8 @@
 <script>
-	import { logged_in_store, username_store } from "./account.js";
 	import { navigateTo, Navigate, routeIsActive } from "svelte-router-spa";
+	import { fly } from "svelte/transition";
+
+	import { logged_in_store, username_store } from "./account";
 
 	let logged_in;
 
@@ -11,14 +13,7 @@
 	let show_drowdown = false;
 
 	let username;
-	username_store.subscribe(value => {
-		username = value;
-	});
-
-	function toggle_dropdown(event) {
-		if (event.target.classList.contains("toggle-dropdown"))
-			show_drowdown = !show_drowdown;
-	}
+	username_store.subscribe(value => username = value);
 
 	async function logout() {
 		show_drowdown = false;
@@ -138,12 +133,12 @@
 		</ul>
 	</nav>
 	{#if logged_in}
-		<div class="account">
-			<button on:click={toggle_dropdown} class="toggle-dropdown">
-				<span class="username toggle-dropdown">{username}</span>
+		<div class="account" transition:fly={{ x: 100 }}>
+			<button on:click={() => show_drowdown = !show_drowdown} class="toggle-dropdown">
+				<span class="username">{username}</span>
 				<svg class="arrow toggle-dropdown" viewBox="0 0 10 10">
-					<line class="toggle-dropdown" x1="2" y1="4" x2="5" y2="7" stroke="white" stroke-width="0.8" />
-					<line class="toggle-dropdown" x1="8" y1="4" x2="5" y2="7" stroke="white" stroke-width="0.8" />
+					<line x1="2" y1="4" x2="5" y2="7" stroke="white" stroke-width="0.8" />
+					<line x1="8" y1="4" x2="5" y2="7" stroke="white" stroke-width="0.8" />
 				</svg>
 			</button>
 			{#if show_drowdown}

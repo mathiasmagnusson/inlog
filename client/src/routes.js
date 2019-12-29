@@ -1,4 +1,4 @@
-import Account from "./Account.svelte";
+import Account from "./account/Account.svelte";
 import FavNum from "./FavNum.svelte";
 import Index from "./Index.svelte";
 import Login from "./Login.svelte";
@@ -6,7 +6,7 @@ import Register from "./Register.svelte";
 import ResetPassword from "./ResetPassword.svelte";
 import BannerLayout from "./BannerLayout.svelte";
 import PopupLayout from "./PopupLayout.svelte";
-import { logged_in_store } from "./account.js";
+import { logged_in_store } from "./account";
 
 let logged_in;
 logged_in_store.subscribe(value => {
@@ -17,11 +17,12 @@ export const routes = [
 	{
 		name: "/",
 		component: Index,
+		layout: BannerLayout,
 	},
 	{
 		name: "fav-num",
 		component: FavNum,
-		onlyIf: { guard: () => logged_in, redirect: "/login" },
+		onlyIf: { guard: () => logged_in !== false, redirect: "/login" },
 		layout: BannerLayout,
 	},
 	{
@@ -42,7 +43,7 @@ export const routes = [
 	{
 		name: "account",
 		component: Account,
-		onlyIf: { guard: () => logged_in, redirect: "/login" },
-		layout: BannerLayout,
+		onlyIf: { guard: () => logged_in !== false, redirect: "/login" },
+		layout: PopupLayout,
 	},
 ];

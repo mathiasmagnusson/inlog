@@ -7,12 +7,12 @@ module.exports = {
 		console.log(store);
 	},
 	create: async function(obj) {
-		let id;
+		let sid;
 		do {
-			id = await uid(18);
-		} while (store.has(id));
-		store.set(id, obj);
-		return id;
+			sid = await uid(18);
+		} while (store.has(sid));
+		store.set(sid, { sid, ...obj });
+		return sid;
 	},
 	get: function(x) {
 		if (typeof x === "string")

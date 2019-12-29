@@ -124,31 +124,27 @@
 	<div class="grid-form">
 		{#if state === "email"}
 			<label for="email">E-postadress</label>
-			<input type="email" bind:value={email} placeholder="johnsmith@domain.com">
+			<input type="email" id="email" bind:value={email} placeholder="johnsmith@domain.com" autofocus>
 			<button disabled={waiting} class="wide" on:click={request_reset_code}>Vidare</button>
 		{:else}
 			<label for="code">Återställningskod</label>
-			<input type="text" bind:value={code}>
+			<input type="text" id="code" bind:value={code} autofocus>
 			<label for="password">Lösenord</label>
-			<input type="password" bind:value={password} placeholder="************" />
+			<input type="password" id="password" bind:value={password} placeholder="************" />
 			<label for="repeat-password">Repetera Lösenord</label>
-			<input type="password" bind:value={repeat_password} placeholder="************" />
+			<input type="password" id="repeat-password" bind:value={repeat_password} placeholder="************" />
 			<button on:click={go_back}>Tillbaka</button>
 			<button disabled={waiting} on:click={submit_reset_code}>Skicka</button>
 		{/if}
-		{#if errors.length}
-			<ul class="error-text">
-				{#each errors as error}
-					<li>{error}</li>
-				{/each}
-			</ul>
-		{/if}
-		{#if successes.length}
-			<ul class="success-text">
-				{#each successes as success}
-					<li>{success}</li>
-				{/each}
-			</ul>
-		{/if}
+		<ul class="error-text">
+			{#each errors as error}
+				<li>{error}</li>
+			{/each}
+		</ul>
+		<ul class="success-text">
+			{#each successes as success}
+				<li>{success}</li>
+			{/each}
+		</ul>
 	</div>
 </main>

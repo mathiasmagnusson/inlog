@@ -1,6 +1,8 @@
 <script>
 	import { navigateTo } from "svelte-router-spa";
-	import { logged_in_store } from "./account.js";
+	import { slide } from "svelte/transition";
+
+	import { logged_in_store } from "./account";
 
 	let errors = [];
 	let successes = [];
@@ -81,24 +83,20 @@
 	<h1>Logga in</h1>
 	<div class="grid-form">
 		<label for="username">Användarnamn</label>
-		<input type="text" bind:value={username} placeholder="johnsmith" />
+		<input type="text" id="username" bind:value={username} placeholder="johnsmith" autofocus />
 		<label for="password">Lösenord</label>
-		<input type="password" bind:value={password} placeholder="************" />
+		<input type="password" id="password" bind:value={password} placeholder="************" />
 		<button disabled={waiting} class="wide" on:click={submit}>Logga in</button>
 		<a class="wide" href="/reset-password">Glömt lösenordet?</a>
-		{#if errors.length}
-			<ul class="error-text">
-				{#each errors as error}
-					<li>{error}</li>
-				{/each}
-			</ul>
-		{/if}
-		{#if successes.length}
-			<ul class="success-text">
-				{#each successes as success}
-					<li>{success}</li>
-				{/each}
-			</ul>
-		{/if}
+		<ul class="error-text">
+			{#each errors as error}
+				<li in:slide>{error}</li>
+			{/each}
+		</ul>
+		<ul class="success-text">
+			{#each successes as success}
+				<li in:slide>{success}</li>
+			{/each}
+		</ul>
 	</div>
 </main>
