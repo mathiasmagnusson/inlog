@@ -420,4 +420,4 @@ api.post("/logout", async (req, res) => {
 	res.clearCookie("sid").status(200).send({ msg: "Utloggad", redirect: "/" });
 });
 
-server.listen(4433, () => console.log("server started at http://localhost:4433"));
+server.listen(8097, () => console.log("http://localhost:8097"));

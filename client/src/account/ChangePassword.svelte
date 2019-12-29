@@ -1,4 +1,6 @@
 <script>
+	import { slide } from "svelte/transition";
+
 	let errors = [];
 	let successes = [];
 	let waiting = false;
@@ -71,14 +73,14 @@
 	{#if errors.length}
 		<ul class="error-text">
 			{#each errors as error}
-				<li>{error}</li>
+				<li in:slide>{error}</li>
 			{/each}
 		</ul>
 	{/if}
 	{#if successes.length}
 		<ul class="success-text">
 			{#each successes as success}
-				<li>{success}</li>
+				<li in:slide>{success}</li>
 			{/each}
 		</ul>
 	{/if}
