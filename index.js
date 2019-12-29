@@ -373,8 +373,8 @@ async function request_reset_code(email, res) {
 	const end_time = Date.now() + min_time;
 
 	const transporter = nodemailer.createTransport({
-		host: "mail.magnusson.space",
-		port: 587,
+		host: creds.smtp.host,
+		port: creds.smtp.port,
 		secure: false,
 		auth: {
 			user: creds.smtp.user,
