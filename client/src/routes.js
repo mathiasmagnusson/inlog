@@ -1,12 +1,17 @@
 import Account from "./Account.svelte";
-import Home from "./Home.svelte";
+import FavNum from "./FavNum.svelte";
 import Index from "./Index.svelte";
 import Login from "./Login.svelte";
 import Register from "./Register.svelte";
+import ResetPassword from "./ResetPassword.svelte";
+import BannerLayout from "./BannerLayout.svelte";
+import PopupLayout from "./PopupLayout.svelte";
+import { logged_in_store } from "./account.js";
 
-export default function loggedIn() {
-	return document.cookie.includes("sid");
-}
+let logged_in;
+logged_in_store.subscribe(value => {
+	logged_in = value;
+});
 
 export const routes = [
 	{
@@ -14,21 +19,30 @@ export const routes = [
 		component: Index,
 	},
 	{
-		name: "/home",
-		component: Home,
-		onlyIf: { guard: loggedIn, redirect: "/login" },
+		name: "fav-num",
+		component: FavNum,
+		onlyIf: { guard: () => logged_in, redirect: "/login" },
+		layout: BannerLayout,
 	},
 	{
 		name: "login",
 		component: Login,
+		layout: PopupLayout,
 	},
 	{
 		name: "register",
 		component: Register,
+		layout: PopupLayout,
+	},
+	{
+		name: "reset-password",
+		component: ResetPassword,
+		layout: PopupLayout,
 	},
 	{
 		name: "account",
 		component: Account,
-		onlyIf: { guard: loggedIn, redirect: "/login" },
-	}
+		onlyIf: { guard: () => logged_in, redirect: "/login" },
+		layout: BannerLayout,
+	},
 ];

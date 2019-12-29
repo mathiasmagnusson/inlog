@@ -2,6 +2,9 @@
 	import { navigateTo } from "svelte-router-spa";
 
 	let errors = [];
+	let successes = [];
+	let waiting = false;
+
 	let username = "";
 	let email = "";
 	let password = "";
@@ -10,19 +13,20 @@
 	async function submit() {
 		errors = [];
 
-		if (password === "")
-			errors = [...errors, "Lösenord saknas"];
+		if (username === "")
+			errors = [...errors, "Användarnamn saknas"];
 
 		if (email === "")
 			errors = [...errors, "E-postadress saknas"];
 
-		if (password === repeat_password)
+		if (password === "")
+			errors = [...errors, "Lösenord saknas"];
+		else if (password !== repeat_password)
 			errors = [...errors, "Lösenorden matchar inte"];
 
-		if (username === "")
-			errors = [...errors, "Användarnamn saknas"];
+		if (errors.length) return;
 
-		if (errors) return;
+		let waiting = true;
 
 		const res = await fetch("/api/register", {
 			method: "post",
@@ -38,30 +42,27 @@
 
 		let json;
 		try {
-			json = await json();
+			json = await res.json();
 		}
-		catch (e) {
+		catch (err) {
+			waiting = false;
 			return errors = [...errors, "Serverfel"];
 		}
 
+		waiting = false;
+
 		if (res.status !== 200)
 			return errors = [...errors, json.msg];
+		else if (json.msg)
+			successes = [...successes, json.msg];
 
+		waiting = true;
 		if (json.redirect)
-			navigateTo(json.redirect);
+			setTimeout(() => navigateTo(json.redirect), 500);
 	}
 </script>
 
 <style>
-	.bg {
-		background-color: #4080ff;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		width: 100vw;
-		height: 100vh;
-	}
-
 	main {
 		width: 80%;
 		max-width: 500px;
@@ -74,30 +75,33 @@
 		text-align: center;
 		margin-bottom: 20px;
 	}
-
-	.error-text {
-		color: red;
-	}
 </style>
 
-<div class="bg">
-	<main>
-		<h1>Registrera</h1>
-		<div class="grid-form">
-			<label for="username">Användarnamn</label>
-			<input type="text" bind:value={username} placeholder="johnsmith" />
-			<label for="email">E-postadress</label>
-			<input type="email" bind:value={email} placeholder="johnsmith@domain.com" />
-			<label for="password">Lösenord</label>
-			<input type="password" bind:value={password} placeholder="************" />
-			<label for="repeat-password">Repetera Lösenord</label>
-			<input type="password" bind:value={repeat_password} placeholder="************" />
-			<button on:click={submit}>Registrera</button>
+<main>
+	<h1>Registrera</h1>
+	<div class="grid-form">
+		<label for="username">Användarnamn</label>
+		<input type="text" bind:value={username} placeholder="johnsmith" />
+		<label for="email">E-postadress</label>
+		<input type="email" bind:value={email} placeholder="johnsmith@domain.com" />
+		<label for="password">Lösenord</label>
+		<input type="password" bind:value={password} placeholder="************" />
+		<label for="repeat-password">Repetera Lösenord</label>
+		<input type="password" bind:value={repeat_password} placeholder="************" />
+		<button class="wide" on:click={submit}>Registrera</button>
+		{#if errors.length}
 			<ul class="error-text">
 				{#each errors as error}
 					<li>{error}</li>
 				{/each}
 			</ul>
-		</div>
-	</main>
-</div>
+		{/if}
+		{#if successes.length}
+			<ul class="success-text">
+				{#each successes as success}
+					<li>{success}</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+</main>

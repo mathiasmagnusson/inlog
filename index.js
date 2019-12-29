@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const cookie_parser = require("cookie-parser");
+const { validate: validate_email } = require("email-validator");
 const escape_html = require("escape-html");
 const express = require("express");
 const nodemailer = require("nodemailer");
@@ -8,7 +9,10 @@ const uid = require("uid-safe");
 
 const creds = require("./creds.js");
 const db = require("./db.js");
-const session = require("./session.js");
+const sessions = require("./sessions.js");
+const { delay } = require("./util.js");
+
+const SALT_ROUNDS = 11;
 
 const server = express();
 const api = express();
@@ -17,12 +21,14 @@ server.use(cookie_parser());
 server.use(express.json());
 
 server.use("/", express.static("client/public"));
+
 [
 	"/",
-	"/home",
+	"/account",
+	"/fav-num",
 	"/login",
 	"/register",
-	"/account",
+	"/reset-password",
 ]
 	.forEach(route => {
 		server.get(route, (req, res) => res.sendFile(path.resolve("client/public/index.html")));
@@ -30,186 +36,250 @@ server.use("/", express.static("client/public"));
 
 server.use("/api/", api);
 
-api.post("/fav-num", async (req, res) => {
-	if (!session.has(req))
-		return res.status(401).send({ msg: "Du måste logga för att göra detta", redirect: "/login/" });
+function error500(err, res) {
+	console.error(err);
+	res.status(500).send({ msg: "Internt serverfel" });
+}
 
-	let account_id = session.get(req.cookies.sid).id;
-
-	try {
-		const { "fav-num": fav_num } = req.body;
-
-		const select_res = await db.query(
-			"SELECT id FROM fav_nums WHERE account_id = ?",
-			account_id
-		);
-
-		if (select_res.length == 0) {
-			const insert_res = await db.query(
-				"INSERT INTO fav_nums (account_id, fav_num) VALUES (?, ?)",
-				[account_id, fav_num]
-			);
+function withAuth(handler) {
+	return function(req, res) {
+		if (sessions.has(req)) {
+			handler(sessions.get(req), ...arguments).catch(err => {
+				error500(err, res);
+			});
 		} else {
-			const update_res = await db.query(
-				"UPDATE fav_nums SET fav_num = ? WHERE id = ?",
-				[fav_num, select_res[0].id]
-			);
+			res.status(401).send({ msg: "Du måste logga in först", redirect: "/login/" });
 		}
+	};
+}
 
-		res.status(204).send();
-	}
-	catch (e) {
-		console.error(e);
-		res.status(500).send({ msg: "Internt serverfel" });
-	}
-});
+function error_wrapper(handler) {
+	return function(req, res) {
+		handler(...arguments).catch(err => {
+			error500(err, res);
+		});
+	};
+}
 
-api.get("/fav-num", async (req, res) => {
-	if (!session.has(req))
-		return res.status(401).send({ msg: "Du måste logga för att göra detta", redirect: "/login/" });
+api.get("/username", withAuth(async (session, req, res) => {
+	const result = await db.query(
+		"SELECT username FROM account WHERE id = ?",
+		session.id,
+	);
 
-	let id = session.get(req.cookies.sid).id;
+	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("username", ...)`;
 
-	try {
-		const result = await db.query(
-			"SELECT fav_num FROM fav_nums WHERE account_id = ?",
-			id
+	const { username } = result[0];
+
+	await delay(500);
+
+	res.status(200).send({ username });
+}));
+
+api.post("/fav-num", withAuth(async (session, req, res) => {
+	const { "fav-num": fav_num } = req.body;
+
+	if (typeof fav_num !== "number")
+		return res.status(400).send({ msg: "Inte ett nummer" });
+
+	const select_res = await db.query(
+		"SELECT id FROM fav_nums WHERE account_id = ?",
+		session.id,
+	);
+
+	if (select_res.length == 0) {
+		const insert_res = await db.query(
+			"INSERT INTO fav_nums (account_id, fav_num) VALUES (?, ?)",
+			[session.id, fav_num],
 		);
-
-		let fav_num = result[0] ? result[0].fav_num : undefined;
-
-		res.status(200).send({ "fav-num": fav_num });
+	} else {
+		const update_res = await db.query(
+			"UPDATE fav_nums SET fav_num = ? WHERE id = ?",
+			[fav_num, select_res[0].id],
+		);
 	}
-	catch (e) {
-		console.error(e);
-		res.status(500).send({ msg: "Internt serverfel" });
-	}
-});
 
-api.post("/register", async (req, res) => {
+	res.status(200).send({});
+}));
+
+api.get("/fav-num", withAuth(async (session, req, res) => {
+	const result = await db.query(
+		"SELECT fav_num FROM fav_nums WHERE account_id = ?",
+		session.id,
+	);
+
+	let fav_num = result[0] ? result[0].fav_num : undefined;
+
+	res.status(200).send({ "fav-num": fav_num });
+}));
+
+api.post("/register", error_wrapper(async (req, res) => {
 	const { username, email, password } = req.body;
 
-	try {
-		const result = await db.query(
-			"SELECT COUNT(*) as taken FROM account WHERE username = ?",
-			username,
-		);
+	if (!username || !email || !password)
+		return res.status(400).send({ msg: "Användarnamn, e-postadress och/eller lösenord saknas" });
 
-		if (result[0].taken > 0)
-			return res.status(402).send({ "msg": "Användarnamn upptaget" });
+	if (!validate_email(email))
+		return res.status(400).send({ msg: "Felformaterad e-postadress" });
 
-		const hash = await bcrypt.hash(password, 11);
+	const result = await db.query(
+		"SELECT COUNT(*) as taken FROM account WHERE username = ?",
+		username,
+	);
 
-		const result2 = await db.query(
-			"INSERT INTO account (username, email, password) VALUES (?, ?, ?)",
-			[username, email, hash]
-		);
+	if (result[0].taken > 0)
+		return res.status(406).send({ "msg": "Användarnamn upptaget" });
 
-		res.status(200).send({ msg: "Användare skapad", redirect: "/login/" });
-	}
-	catch (e) {
-		console.error(e);
-		res.status(500).send({ msg: "Internt serverfel" });
-	}
-});
+	const hash = await bcrypt.hash(password, SALT_ROUNDS);
 
-api.post("/login", async (req, res) => {
+	const result2 = await db.query(
+		"INSERT INTO account (username, email, password) VALUES (?, ?, ?)",
+		[username, email, hash],
+	);
+
+	res.status(200).send({ msg: "Användare skapad", redirect: "/login/" });
+}));
+
+api.post("/login", error_wrapper(async (req, res) => {
 	const { username, password } = req.body;
 
 	if (!username || !password)
-		return res.status(400).send({ msg: "Användanamn / Lösenord saknas" });
+		return res.status(400).send({ msg: "Användanamn och/eller lösenord saknas" });
 
-	try {
-		const result = await db.query(
-			"SELECT id, password FROM account WHERE username = ?",
-			username,
-		);
+	const result = await db.query(
+		"SELECT id, password FROM account WHERE username = ?",
+		username,
+	);
 
-		let username_exists = result.length > 0;
+	let username_exists = result.length > 0;
 
-		const hash = username_exists ? result[0].password : "$2b$10$iegfsCC2ODTkuDemvEGIGeAf7/vEUjU2QUITW27cHtS08kGTRAO4e";
+	const hash = username_exists ? result[0].password : "$2b$10$iegfsCC2ODTkuDemvEGIGeAf7/vEUjU2QUITW27cHtS08kGTRAO4e";
 
-		const password_correct = await bcrypt.compare(password, hash);
+	const password_correct = await bcrypt.compare(password, hash);
 
-		if (!(password_correct && username_exists))
-			return res.status(402).send({ msg: "Felaktiga inloggningsuppgifter" });
+	if (!(password_correct && username_exists))
+		return res.status(406).send({ msg: "Felaktiga inloggningsuppgifter" });
 
-		const cookie = await session.create({ id: result[0].id });
-		res.status(200).cookie("sid", cookie).send({ msg: "Inloggad", redirect: "/home" });
-	}
-	catch (e) {
-		console.error(e);
-		res.status(500).send({ msg: "Internt serverfel" });
-	}
-});
+	const cookie = await sessions.create({ id: result[0].id });
+	res.status(200).cookie("sid", cookie).send({ msg: "Inloggad", redirect: "/" });
+}));
 
-let reset_password_codes = new Map();
 api.post("/reset-password", async (req, res) => {
-	const { email, code } = req.body;
+	const { email, code, password } = req.body;
 
-	try {
-		const result = await db.query(
-			"SELECT id, username FROM account WHERE email = ?",
-			email,
-		);
-
-		// För att det inte ska gå att se vilka adresser som finns är registrerade så ljuger vi ihop
-		// något här. Det kanske ändå går att upptäcka detta m.h.a. tiden det tar för servern att svara
-		// men jag känner att det här får duga.
-		if (result.length == 0)
-			return res.status(500).send({ msg: "Lösenordsåterställningsmail skickat (kolla skräppost!)" });
-
-		const transporter = nodemailer.createTransport({
-			host: "mail.magnusson.space",
-			port: 587,
-			secure: false,
-			auth: {
-				user: creds.smtp.user,
-				pass: creds.smtp.pass,
-			},
+	if (code && password)
+		submit_reset_code(code, password, res).catch(err => {
+			error500(err, res);
 		});
-
-		const codes_names = await Promise.all(result.map(async ({ id, username }) => {
-			let reset_code;
-			do {
-				reset_code = await uid(18);
-			} while (reset_password_codes.has(reset_code));
-
-			reset_password_codes.set(reset_code, {
-				account_id: id,
-				expiration: Date.now() + 1000 * 60 * 10,
-			});
-
-			return { reset_code, username };
-		}));
-
-		const mail_res = await transporter.sendMail({
-			from: "no-reply <noreply@magnusson.space>",
-			to: email,
-			subject: "Lösenordsåterställning",
-			text: codes_names.map(({ reset_code, username }) =>
-				`Använd koden "${reset_code}" för att återställa lösenordet till kontot "${escape_html(username)}".\n\n`),
-			html: codes_names.map(({ reset_code, username }) =>
-				`<p>Använd koden <pre>${reset_code}</pre> för att återställa lösenordet till kontot <i>${escape_html(username)}</i>.</p>`),
+	else if (email)
+		request_reset_code(email, res).catch(err => {
+			error500(err, res);
 		});
-
-		res.status(500).send({ msg: "Lösenordsåterställningsmail skickat (kolla skräpposten!)" });
-	}
-	catch (err) {
-		console.error(err);
-		res.status(500).send({ msg: "Internt serverfel: " + err });
-		console.log(nodemailer);
-	}
+	else
+		res.status(400).send({ msg: "E-postadress eller kod och lösenord saknas" });
 });
+
+// Dessa är temporära och bör därmed inte sparas i databasen
+// TODO: ta bort dem från `Map`en efter att de gått ut
+// TODO: spara hashar av koderna istället?
+let password_reset_codes = new Map();
+async function submit_reset_code(code, password, res) {
+	if (!password_reset_codes.has(code))
+		return res.status(406).send({ msg: "Ogiltig kod" });
+
+	const { account_id, expiration } = password_reset_codes.get(code);
+
+	password_reset_codes.delete(code);
+
+	if (Date.now() > expiration)
+		return res.status(406).send({ msg: "Ogiltig kod" });
+
+	// I fall att någon är inloggad på kontot när lösenordet ändras
+	// så loggas denna ut.
+	sessions.remove_if((key, val) => val.id === account_id);
+
+	const hash = await bcrypt.hash(password, SALT_ROUNDS);
+
+	const result = await db.query(
+		"UPDATE account SET password = ? WHERE id = ?",
+		[hash, account_id],
+	);
+
+	if (result.affectedRows !== 1)
+		throw `Error: Password change affected ${result.affectedRows} rows. Should be 1`;
+
+	res.status(200).send({ msg: "Lösenord ändrat", redirect: "/login/" });
+}
+
+async function request_reset_code(email, res) {
+	if (!validate_email(email))
+		return res.status(400).send({ msg: "Felformaterad e-postadress" });
+
+	const result = await db.query(
+		"SELECT id AS account_id, username FROM account WHERE email = ?",
+		email,
+	);
+
+	const msg = "Lösenordsåterställningsmail skickat om mailen är registrerad (kolla skräpposten!)";
+	const min_time = 1000;
+
+	// För att det inte ska gå att se vilka adresser som är registrerade så returneras
+	// samma sak oavsett om emailen är registrerad eller inte. Dessutom tar det (förhoppningsvis)
+	// lika lång tid oavsett fallet. (Annars går det att se beroende på hur lång tid det tar innan)
+	// servern svarar.
+	if (result.length == 0) {
+		await delay(min_time);
+		return res.status(200).send({ msg });
+	}
+
+	const end_time = Date.now() + min_time;
+
+	const transporter = nodemailer.createTransport({
+		host: "mail.magnusson.space",
+		port: 587,
+		secure: false,
+		auth: {
+			user: creds.smtp.user,
+			pass: creds.smtp.pass,
+		},
+	});
+
+	const codes_names = await Promise.all(result.map(async ({ account_id, username }) => {
+		let reset_code;
+		do {
+			reset_code = await uid(18);
+		} while (password_reset_codes.has(reset_code));
+
+		password_reset_codes.set(reset_code, {
+			account_id,
+			expiration: Date.now() + 1000 * 60 * 10,
+		});
+
+		return { reset_code, username };
+	}));
+
+	const mail_res = await transporter.sendMail({
+		from: "no-reply <noreply@magnusson.space>",
+		to: email,
+		subject: "Lösenordsåterställning",
+		text: codes_names.map(({ reset_code, username }) =>
+			`Använd koden "${reset_code}" för att återställa lösenordet till kontot "${escape_html(username)}".\n\n`).join(""),
+		html: codes_names.map(({ reset_code, username }) =>
+			"<p>Använd koden " +
+			`<span style="font-family: monospace; background: lightgray; padding: 3px; margin: 3px; border-radius: 3px">${reset_code}</span>` +
+			` för att återställa lösenordet till kontot <i>${escape_html(username)}</i>.</p>`
+		).join(""),
+	});
+
+	if (end_time > Date.now())
+		await delay(end_time - Date.now());
+
+	res.status(200).send({ msg });
+}
 
 api.post("/logout", async (req, res) => {
-	session.remove(req.cookies.sid);
-	res.clearCookie("sid").status(200).send({ redirect: "/" });
-});
-
-server.use("/", (err, req, res, next) => {
-	res.status(500).send({ msg: "Internt serverfel" });
-	console.error(err);
+	sessions.remove(req);
+	res.clearCookie("sid").status(200).send({ msg: "Utloggad", redirect: "/" });
 });
 
 server.listen(4433, () => console.log("server started at http://localhost:4433"));

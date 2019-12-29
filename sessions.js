@@ -3,6 +3,9 @@ const uid = require("uid-safe");
 let store = new Map();
 
 module.exports = {
+	print_all: function() {
+		console.log(store);
+	},
 	create: async function(obj) {
 		let id;
 		do {
@@ -11,9 +14,9 @@ module.exports = {
 		store.set(id, obj);
 		return id;
 	},
-	get: function(id) {
-		if (typeof id === "string")
-			return store.get(id);
+	get: function(x) {
+		if (typeof x === "string")
+			return store.get(x);
 
 		if (!"cookies" in x || !"sid" in x.cookies)
 			return false;
@@ -29,7 +32,18 @@ module.exports = {
 
 		return store.has(x.cookies.sid);
 	},
-	remove: function(id) {
-		return store.delete(id);
+	remove: function(x) {
+		if (typeof x === "string")
+			return store.delete(x);
+
+		if (!"cookies" in x || !"sid" in x.cookies)
+			return false;
+
+		return store.delete(x.cookies.sid);
+	},
+	remove_if: function(predicate) {
+		for (const [key, val] of store)
+			if (predicate(key, val))
+				store.delete(key);
 	},
 };

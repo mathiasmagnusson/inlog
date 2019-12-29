@@ -14,6 +14,20 @@ body {
 	min-height: 100vh;
 }
 
+input {
+	height: 34px;
+	border: 1px solid #e3e3e3;
+	border-radius: 4px;
+	padding: 7px;
+}
+
+button {
+	background-color: #f6f6f6;
+	border: 1px solid #e3e3e3;
+	border-radius: 4px;
+	height: 29px;
+}
+
 .grid-form {
 	display: grid;
 	grid-template-columns: 2fr 2fr;
@@ -23,10 +37,21 @@ body {
 
 .grid-form button {
 	margin-top: 5px;
+}
+
+.grid-form .wide {
 	grid-column-start: 1;
 	grid-column-end: 3;
 }
 
-.grid-form #error-text {
+.grid-form .error-text {
 	color: red;
+	grid-column-start: 1;
+	grid-column-end: 3;
+}
+
+.grid-form .success-text {
+	color: green;
+	grid-column-start: 1;
+	grid-column-end: 3;
 }
