@@ -428,4 +428,4 @@ api.post("/logout", async (req, res) => {
 	res.status(200).send({ msg: "Utloggad", redirect: "/" });
 });
 
-server.listen(8097, () => console.log("http://localhost:8097"));
+server.listen(8097, "127.0.0.1", () => console.log("http://localhost:8097"));
