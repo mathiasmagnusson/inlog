@@ -52,6 +52,7 @@
 		else if (json.msg)
 			successes = [...successes, json.msg];
 
+		logged_in_store.set(false);
 		logged_in_store.set(true);
 
 		waiting = true;

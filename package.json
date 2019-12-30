@@ -5,7 +5,8 @@
   "main": "index.js",
   "repository": "https://github.com/mathiasmagnusson/inlog",
   "scripts": {
-    "start": "node ."
+    "start": "node .",
+	"build": "cd client && npm run build"
   },
   "keywords": [],
   "author": "Mathias Magnusson",

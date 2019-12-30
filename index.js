@@ -1,24 +1,34 @@
 const bcrypt = require("bcrypt");
-const cookie_parser = require("cookie-parser");
 const { validate: validate_email } = require("email-validator");
 const escape_html = require("escape-html");
 const express = require("express");
+const express_session = require("express-session");
 const nodemailer = require("nodemailer");
 const path = require("path");
 const uid = require("uid-safe");
 
 const creds = require("./creds.js");
 const db = require("./db.js");
-const sessions = require("./sessions.js");
+const SessionStore = require("./session-store.js")(express_session);
 const { delay } = require("./util.js");
 
 const SALT_ROUNDS = 11;
 
 const server = express();
-const api = express();
 
-server.use(cookie_parser());
+server.set("trust proxy", 1);
+
 server.use(express.json());
+server.use(express_session({
+	cookie: {
+		secure: server.get("env") === "production",
+	},
+	resave: false,
+	saveUninitialized: false,
+	secret: "TODO: fix secret",
+	store: new SessionStore(),
+	unset: "destroy",
+}));
 
 server.use("/", express.static("client/public"));
 
@@ -34,6 +44,7 @@ server.use("/", express.static("client/public"));
 		server.get(route, (req, res) => res.sendFile(path.resolve("client/public/index.html")));
 	});
 
+const api = express();
 server.use("/api/", api);
 
 function error500(err, res) {
@@ -43,8 +54,8 @@ function error500(err, res) {
 
 function withAuth(handler) {
 	return function(req, res) {
-		if (sessions.has(req)) {
-			handler(sessions.get(req), ...arguments).catch(err => {
+		if (req.session.aid) {
+			handler(...arguments).catch(err => {
 				error500(err, res);
 			});
 		} else {
@@ -62,13 +73,13 @@ function error_wrapper(handler) {
 }
 
 api.get("/logged-in", error_wrapper(async (req, res) => {
-	res.status(200).send({ "logged-in": sessions.has(req) });
+	res.status(200).send({ "logged-in": req.session.aid ? true : false });
 }));
 
-api.get("/username", withAuth(async (session, req, res) => {
+api.get("/username", withAuth(async (req, res) => {
 	const result = await db.query(
 		"SELECT username FROM account WHERE id = ?",
-		session.aid,
+		req.session.aid,
 	);
 
 	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("username", ...)`;
@@ -78,7 +89,7 @@ api.get("/username", withAuth(async (session, req, res) => {
 	res.status(200).send({ username });
 }));
 
-api.post("/username", withAuth(async (session, req, res) => {
+api.post("/username", withAuth(async (req, res) => {
 	const { username, password } = req.body;
 
 	if (!username)
@@ -89,7 +100,7 @@ api.post("/username", withAuth(async (session, req, res) => {
 
 	const result = await db.query(
 		"SELECT password AS hash FROM account WHERE id = ?",
-		session.aid,
+		req.session.aid,
 	);
 
 	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("change-email", ...)`;
@@ -111,7 +122,7 @@ api.post("/username", withAuth(async (session, req, res) => {
 
 	const update_result = await db.query(
 		"UPDATE account SET username = ? WHERE id = ?",
-		[username, session.aid],
+		[username, req.session.aid],
 	);
 
 	if (update_result.affectedRows !== 1)
@@ -120,10 +131,10 @@ api.post("/username", withAuth(async (session, req, res) => {
 	res.status(200).send({ msg: "Användarnamn ändrat" });
 }));
 
-api.get("/email", withAuth(async (session, req, res) => {
+api.get("/email", withAuth(async (req, res) => {
 	const result = await db.query(
 		"SELECT email FROM account WHERE id = ?",
-		session.aid,
+		req.session.aid,
 	);
 
 	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("email", ...)`;
@@ -133,7 +144,7 @@ api.get("/email", withAuth(async (session, req, res) => {
 	res.status(200).send({ email });
 }));
 
-api.post("/email", withAuth(async (session, req, res) => {
+api.post("/email", withAuth(async (req, res) => {
 	const { email, password } = req.body;
 
 	if (!email)
@@ -147,7 +158,7 @@ api.post("/email", withAuth(async (session, req, res) => {
 
 	const result = await db.query(
 		"SELECT password AS hash FROM account WHERE id = ?",
-		session.aid,
+		req.session.aid,
 	);
 
 	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("change-email", ...)`;
@@ -161,7 +172,7 @@ api.post("/email", withAuth(async (session, req, res) => {
 
 	const update_result = await db.query(
 		"UPDATE account SET email = ? WHERE id = ?",
-		[email, session.aid]
+		[email, req.session.aid]
 	);
 
 	if (update_result.affectedRows !== 1)
@@ -170,7 +181,7 @@ api.post("/email", withAuth(async (session, req, res) => {
 	res.status(200).send({ msg: "E-postadress ändrad" });
 }));
 
-api.post("/change-password", withAuth(async (session, req, res) => {
+api.post("/change-password", withAuth(async (req, res) => {
 	const {
 		"old-password": old_password,
 		"new-password": new_password,
@@ -184,7 +195,7 @@ api.post("/change-password", withAuth(async (session, req, res) => {
 
 	const result = await db.query(
 		"SELECT password AS hash FROM account WHERE id = ?",
-		session.aid,
+		req.session.aid,
 	);
 
 	if (result.length !== 1) throw `result.length is ${result.length}, but should be 1 at api.get("change-email", ...)`;
@@ -199,13 +210,13 @@ api.post("/change-password", withAuth(async (session, req, res) => {
 
 	// Alla sessioner som är inloggade på det här kontot, men som inte är just
 	// den här sessionen, loggas ut.
-	sessions.remove_if((sid, other) => other.aid === session.aid && sid !== session.sid);
+	req.sessionStore.destroy_if(session => req.session.aid === session.aid && req.session !== session);
 
 	const new_hash = await bcrypt.hash(new_password, SALT_ROUNDS);
 
 	const update_result = await db.query(
 		"UPDATE account SET password = ? WHERE id = ?",
-		[new_hash, session.aid],
+		[new_hash, req.session.aid],
 	);
 
 	if (update_result.affectedRows !== 1)
@@ -214,7 +225,7 @@ api.post("/change-password", withAuth(async (session, req, res) => {
 	res.status(200).send({ msg: "Lösenord ändrat" });
 }));
 
-api.post("/fav-num", withAuth(async (session, req, res) => {
+api.post("/fav-num", withAuth(async (req, res) => {
 	const { "fav-num": fav_num } = req.body;
 
 	if (typeof fav_num !== "number")
@@ -222,13 +233,13 @@ api.post("/fav-num", withAuth(async (session, req, res) => {
 
 	const select_res = await db.query(
 		"SELECT id FROM fav_num WHERE account_id = ?",
-		session.aid,
+		req.session.aid,
 	);
 
 	if (select_res.length == 0) {
 		const insert_res = await db.query(
 			"INSERT INTO fav_num (account_id, num) VALUES (?, ?)",
-			[session.aid, fav_num],
+			[req.session.aid, fav_num],
 		);
 	} else {
 		const update_res = await db.query(
@@ -240,10 +251,10 @@ api.post("/fav-num", withAuth(async (session, req, res) => {
 	res.status(200).send({ msg: "Favoritnummer updaterat" });
 }));
 
-api.get("/fav-num", withAuth(async (session, req, res) => {
+api.get("/fav-num", withAuth(async (req, res) => {
 	const result = await db.query(
 		"SELECT num FROM fav_num WHERE account_id = ?",
-		session.aid,
+		req.session.aid,
 	);
 
 	let num = result[0] ? result[0].num : undefined;
@@ -298,15 +309,15 @@ api.post("/login", error_wrapper(async (req, res) => {
 	if (!(password_correct && username_exists))
 		return res.status(406).send({ msg: "Felaktiga inloggningsuppgifter" });
 
-	const cookie = await sessions.create({ aid: result[0].id });
-	res.status(200).cookie("sid", cookie).send({ msg: "Inloggad", redirect: "/" });
+	req.session.aid = result[0].id;
+	res.status(200).send({ msg: "Inloggad", redirect: "/" });
 }));
 
 api.post("/reset-password", async (req, res) => {
 	const { email, code, password } = req.body;
 
 	if (code && password)
-		submit_reset_code(code, password, res).catch(err => {
+		submit_reset_code(req, res, code, password).catch(err => {
 			error500(err, res);
 		});
 	else if (email)
@@ -319,22 +330,18 @@ api.post("/reset-password", async (req, res) => {
 
 // Dessa är temporära och bör därmed inte sparas i databasen
 // TODO: ta bort dem från `Map`en efter att de gått ut
-// TODO: spara hashar av koderna istället?
 let password_reset_codes = new Map();
-async function submit_reset_code(code, password, res) {
-	if (!password_reset_codes.has(code))
-		return res.status(406).send({ msg: "Ogiltig kod" });
+async function submit_reset_code(req, res, code, password) {
+	const aid = password_reset_codes.get(code);
 
-	const { aid, expiration } = password_reset_codes.get(code);
+	if (!aid)
+		return res.status(406).send({ msg: "Ogiltig kod" });
 
 	password_reset_codes.delete(code);
 
-	if (Date.now() > expiration)
-		return res.status(406).send({ msg: "Ogiltig kod" });
-
 	// I fall att någon är inloggad på kontot när lösenordet ändras
 	// så loggas denna ut.
-	sessions.remove_if((key, val) => val.aid === aid);
+	req.sessionStore.destroy_if(session => aid === session.aid);
 
 	const hash = await bcrypt.hash(password, SALT_ROUNDS);
 
@@ -388,10 +395,11 @@ async function request_reset_code(email, res) {
 			reset_code = await uid(18);
 		} while (password_reset_codes.has(reset_code));
 
-		password_reset_codes.set(reset_code, {
-			aid,
-			expiration: Date.now() + 1000 * 60 * 10,
-		});
+		password_reset_codes.set(reset_code, aid);
+
+		setTimeout(() => {
+			password_reset_codes.delete(reset_code);
+		}, 1000 * 60 * 10);
 
 		return { reset_code, username };
 	}));
@@ -416,8 +424,8 @@ async function request_reset_code(email, res) {
 }
 
 api.post("/logout", async (req, res) => {
-	sessions.remove(req);
-	res.clearCookie("sid").status(200).send({ msg: "Utloggad", redirect: "/" });
+	delete req.session;
+	res.status(200).send({ msg: "Utloggad", redirect: "/" });
 });
 
 server.listen(8097, () => console.log("http://localhost:8097"));
