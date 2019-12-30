@@ -126,10 +126,10 @@
 <header>
 	<nav>
 		<ul>
-			<a href="/">Hem</a>
-			<a href="/fav-num">Favoritnummer</a>
-			<a href="/login">Logga in</a>
-			<a href="/register">Registrera konto</a>
+			<li><a href="/">Hem</a></li>
+			<li><a href="/fav-num">Favoritnummer</a></li>
+			<li><a href="/login">Logga in</a></li>
+			<li><a href="/register">Registrera konto</a></li>
 		</ul>
 	</nav>
 	{#if logged_in}
