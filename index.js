@@ -279,7 +279,7 @@ api.post("/register", error_wrapper(async (req, res) => {
 	if (result[0].taken > 0)
 		return res.status(406).send({ "msg": "Användarnamn upptaget" });
 
-	console.log(`Skapar kontot ${username} <${email}>.`):
+	console.log(`Skapar kontot ${username} <${email}>.`);
 
 	const hash = await bcrypt.hash(password, SALT_ROUNDS);
 
@@ -311,7 +311,7 @@ api.post("/login", error_wrapper(async (req, res) => {
 	if (!(password_correct && username_exists))
 		return res.status(406).send({ msg: "Felaktiga inloggningsuppgifter" });
 
-	console.log(`Loggar in ${username}.`):
+	console.log(`Loggar in ${username}.`);
 
 	req.session.aid = result[0].id;
 	res.status(200).send({ msg: "Inloggad", redirect: "/" });
