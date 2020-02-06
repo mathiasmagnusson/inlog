@@ -44,7 +44,7 @@ echo "{
 		\"user\": \"$MYSQL_USERNAME\",
 		\"pass\": \"$MYSQL_PASSWORD\",
 		\"database\": \"$MYSQL_DATABASE\",
-		\"host\": \"$MYSQL_DATABASE\"
+		\"host\": \"$MYSQL_HOST\"
 	}
 }
 " > creds.json

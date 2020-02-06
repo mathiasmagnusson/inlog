@@ -6,7 +6,7 @@
   "repository": "https://github.com/mathiasmagnusson/inlog",
   "scripts": {
     "start": "node .",
-	"build": "cd client && npm run build"
+    "build": "cd client && npm run build"
   },
   "keywords": [],
   "author": "Mathias Magnusson",
